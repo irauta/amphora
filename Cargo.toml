@@ -1,0 +1,8 @@
+[package]
+name = "amphora"
+version = "0.1.0"
+authors = ["Ilkka Rauta <ilkka.rauta@gmail.com>"]
+
+[dependencies.bitreader]
+version = "*"
+path = "../bitreader"
