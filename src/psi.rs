@@ -36,7 +36,8 @@ bit_struct!(
                 associations.push(try!(Deserialize::deserialize(reader)));
             }
             associations
-        } }
+        } },
+        crc: { 32 }
     }
 );
 

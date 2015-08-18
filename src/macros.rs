@@ -31,6 +31,10 @@ macro_rules! bit_struct {
         try!(::base::expect($reader, $bits, $value))
     );
 
+    (field crc : $reader:ident : { 32 }) => (
+        try!($reader.skip(32));
+    );
+
     (field $field:ident : $reader:ident : { value : $e:expr }) => (
         let $field = $e;
     );
