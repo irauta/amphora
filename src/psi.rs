@@ -5,7 +5,7 @@ use super::base::*;
 
 bit_struct!(
     #[derive(Debug,Clone)]
-    pub struct ProgramAssociationTable {
+    pub struct ProgramAssociationSection {
         pub transport_stream_id: u16,
         pub version_number: u8,
         pub current_next_indicator: bool,
