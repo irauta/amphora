@@ -14,8 +14,11 @@ macro_rules! bit_struct {
             $(pub $field_name: $field_type),+
         }
         impl ::base::Deserialize for $struct_name {
-            fn deserialize($reader: &mut ::bitreader::BitReader) -> ::base::DeserializationResult<$struct_name> {
+            fn deserialize(original_reader: &mut ::bitreader::BitReader) -> ::base::DeserializationResult<$struct_name> {
+                let mut relative_reader = original_reader.relative_reader();
+                let $reader = &mut relative_reader;
                 $( bit_struct!(field $field : $reader : { $($tokens)+ } ); )+
+                try!(original_reader.skip($reader.position() as u32));
                 Ok($struct_name {
                     $($field_name: $field_name),+
                 })
