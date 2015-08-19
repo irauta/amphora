@@ -11,8 +11,8 @@ pub enum DeserializationError {
     InvalidSectionHeader,
     UnexpectedValue {
         position: u64,
-        expected: i64,
-        got: i64,
+        expected: u64,
+        got: u64,
     },
     BitReaderError(BitReaderError)
 }
@@ -54,11 +54,13 @@ pub trait Deserialize: Sized {
 }
 
 pub fn reserved(reader: &mut BitReader, bits: u8) -> DeserializationResult<()> {
-    expect(reader, bits, -1)
+    let all_on: u64 = !0;
+    let expected = all_on >> (64 - bits);
+    expect(reader, bits, expected)
 }
 
-pub fn expect(reader: &mut BitReader, bits: u8, reference_value: i64) -> DeserializationResult<()> {
-    let value = try!(reader.read_i64(bits));
+pub fn expect(reader: &mut BitReader, bits: u8, reference_value: u64) -> DeserializationResult<()> {
+    let value = try!(reader.read_u64(bits));
     if value != reference_value {
         return Err(DeserializationError::UnexpectedValue {
             position: reader.position(),
