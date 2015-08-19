@@ -2,6 +2,7 @@
 //! # Program Specific Information (PSI)
 
 use super::base::*;
+use super::section::section_bytes_left;
 
 bit_struct!(
     #[derive(Debug,Clone)]
@@ -26,13 +27,9 @@ bit_struct!(
         section_number: { 8 },
         last_section_number: { 8 },
         associations: { value: {
-            let fixed_bytes = 12; // How many bytes for header and CRC field
             let association_size = 4; // How many bytes for single program association
-            let data_bytes = section_length - fixed_bytes;
-            let num_associations = data_bytes / association_size;
-
             let mut associations = vec![];
-            for _ in 0..num_associations {
+            while section_bytes_left(section_length, reader) >= association_size {
                 associations.push(try!(Deserialize::deserialize(reader)));
             }
             associations

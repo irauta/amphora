@@ -43,3 +43,21 @@ bit_struct!(
         last_section_number: { 8 }
     }
 );
+
+/// Takes the section length and a BitReader and tells how many bytes there are left
+/// in the section, the four CRC32 bytes excluded.
+///
+/// The result is rounded down if the reader is not at byte-aligned position.
+///
+/// The reader must have its position relative to the start of the section!
+/// That is, its position() method must return 0 right before the table_id byte was read from the
+/// beginning of the section. (This note is mostly relevant when there are several sections in
+/// row or similar in a single byte buffer.)
+pub fn section_bytes_left(section_length: u16, reader: &::bitreader::BitReader) -> u16 {
+    // table_id(8 bits) + section_syntax_indicator(1 bit) + 1 bit + 2 reserved bits
+    // + section_length(12 bits) = 24 bits = 3 bytes
+    let header_length = 3;
+    // Length of the CRC32 field at the end of section
+    let crc_length = 4;
+    header_length + section_length - crc_length - (reader.position() / 8) as u16
+}
