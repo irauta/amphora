@@ -39,7 +39,12 @@ macro_rules! bit_struct {
     );
 
     (field skip : $reader:ident : { $bits:expr }) => (
-        try!($reader.skip($bits));
+        {
+            // Evaluate $bits before using the result, as $bits might use $reader which would
+            // cause a borrow conflict.
+            let bits = $bits;
+            try!($reader.skip(bits))
+        }
     );
 
     (field $field:ident : $reader:ident : { value : $e:expr }) => (

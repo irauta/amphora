@@ -11,6 +11,7 @@ pub enum DeserializationError {
     InvalidSectionHeader,
     UnexpectedValue {
         position: u64,
+        length: u8,
         expected: u64,
         got: u64,
     },
@@ -31,8 +32,8 @@ impl fmt::Display for DeserializationError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             DeserializationError::InvalidSectionHeader => self.description().fmt(fmt),
-            DeserializationError::UnexpectedValue{ position, expected, got } =>
-                write!(fmt, "Expected {} at position {}, but got {}", expected, position, got),
+            DeserializationError::UnexpectedValue{ position, length, expected, got } =>
+                write!(fmt, "Expected {} at position {}..{}, but got {}", expected, position, position + length as u64, got),
             DeserializationError::BitReaderError(ref err) => err.fmt(fmt),
         }
     }
@@ -60,13 +61,19 @@ pub fn reserved(reader: &mut BitReader, bits: u8) -> DeserializationResult<()> {
 }
 
 pub fn expect(reader: &mut BitReader, bits: u8, reference_value: u64) -> DeserializationResult<()> {
+    let position = reader.position();
     let value = try!(reader.read_u64(bits));
     if value != reference_value {
         return Err(DeserializationError::UnexpectedValue {
-            position: reader.position(),
+            position: position,
+            length: bits,
             expected: reference_value,
             got: value,
         });
     }
     Ok(())
+}
+
+pub fn bool_flag(value: u8) -> bool {
+    value == 1
 }

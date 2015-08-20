@@ -1,5 +1,5 @@
 
-use super::base::Deserialize;
+use ::base::Deserialize;
 
 bit_struct!(
     #[derive(Debug,Copy,Clone)]

@@ -1,8 +1,9 @@
 
 //! # Program Specific Information (PSI)
 
-use super::base::*;
-use super::section::section_bytes_left;
+use ::base::*;
+use ::section::section_bytes_left;
+use ::descriptor::{Descriptor,deserialize_descriptor};
 
 bit_struct!(
     #[derive(Debug,Clone)]
@@ -63,3 +64,35 @@ impl Deserialize for ProgramAssociation {
         Ok(association)
     }
 }
+
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ConditionalAccessSection {
+        pub version_number: u8,
+        pub current_next_indicator: bool,
+        pub section_number: u8,
+        pub last_section_number: u8,
+        pub descriptors: Vec<Box<Descriptor>>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 1 }, // table_id
+        expect: { bits: 1, reference: 1 }, // section_syntax_indicator
+        expect: { bits: 1, reference: 0 }, // just a constant zero bit
+        reserved: { 2 },
+        section_length: { 12, type: u16 },
+        reserved: { 18 },
+        version_number: { 5 },
+        current_next_indicator: { 1, map: |b: u8| b == 1 },
+        section_number: { 8 },
+        last_section_number: { 8 },
+        descriptors: { value: {
+            let mut descriptors = vec![];
+            while section_bytes_left(section_length, reader) > 0 {
+                descriptors.push(try!(deserialize_descriptor(reader)));
+            }
+            descriptors
+        } },
+        crc: { 32 }
+    }
+);
