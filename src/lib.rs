@@ -7,4 +7,3 @@ mod macros;
 pub mod base;
 pub mod section;
 pub mod descriptor;
-pub mod psi;
