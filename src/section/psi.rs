@@ -142,7 +142,7 @@ bit_struct!(
         pub programs: Vec<ElementaryStreamInfo>
     }
     deserialize(reader) {
-        expect: { bits: 2, reference: 2 }, // table_id
+        expect: { bits: 8, reference: 2 }, // table_id
         expect: { bits: 1, reference: 1 }, // section_syntax_indicator
         expect: { bits: 1, reference: 0 }, // 0
         reserved: { 2 },

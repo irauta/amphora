@@ -1,16 +1,24 @@
 
 use ::base::{Deserialize,bool_flag};
-use super::{Descriptor,bits_remaining};
+use super::{Descriptor,bits_remaining,repeated_element,read_tla};
 
 bit_struct!(
     #[derive(Debug)]
     pub struct UnknownDescriptor {
         pub descriptor_tag: u8,
-        pub descriptor_length: u8
+        pub descriptor_length: u8,
+        pub data: Vec<u8>
     }
     deserialize(reader) {
         descriptor_tag: { 8 },
         descriptor_length: { 8 },
+        data: { value: {
+            let mut data = vec![];
+            for _ in 0..descriptor_length {
+                data.push(try!(reader.read_u8(8)));
+            }
+            data
+        } },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -50,7 +58,7 @@ bit_struct!(
         constrained_parameter: { 1, map: bool_flag },
         still_picture: { 1, map: bool_flag },
         extension: { value: if mpeg_1_only {
-                Some(try!(<VideoStreamDescriptorExtension as Deserialize>::deserialize(reader)))
+                Some(try!(Deserialize::deserialize(reader)))
             } else {
                 None
             }
@@ -217,16 +225,7 @@ bit_struct!(
         pub audio_type: u8
     }
     deserialize(reader) {
-        byte_1: { 8, type: u8 },
-        byte_2: { 8, type: u8 },
-        byte_3: { 8, type: u8 },
-        language: { value: {
-            let mut language = String::with_capacity(3);
-            language.push(byte_1 as char);
-            language.push(byte_2 as char);
-            language.push(byte_3 as char);
-            language
-        } },
+        language: { value: try!(read_tla(reader)) },
         audio_type: { 8 }
     }
 );
@@ -239,13 +238,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 10 },
         descriptor_length: { 8 },
-        languages: { value: {
-            let mut languages = vec![];
-            while bits_remaining(descriptor_length, reader) >= 32 { // 32 bits per language element
-                languages.push(try!(<Iso639LanguageDescriptorLanguage as Deserialize>::deserialize(reader)));
-            }
-            languages
-        } },
+        languages: { value: try!(repeated_element(descriptor_length, reader, 32)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -485,13 +478,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 31 },
         descriptor_length: { 8 },
-        channels: { value: {
-            let mut channels = vec![];
-            while bits_remaining(descriptor_length, reader) >= 24 { // 24 bits per element
-                channels.push(try!(<FmcDescriptorChannel as Deserialize>::deserialize(reader)));
-            }
-            channels
-        } },
+        channels: { value: try!(repeated_element(descriptor_length, reader, 24)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );

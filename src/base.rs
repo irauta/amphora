@@ -8,22 +8,25 @@ pub type DeserializationResult<T> = Result<T, DeserializationError>;
 
 #[derive(Debug,Clone,Copy)]
 pub enum DeserializationError {
-    InvalidSectionHeader,
     UnexpectedValue {
         position: u64,
         length: u8,
         expected: u64,
         got: u64,
     },
-    BitReaderError(BitReaderError)
+    BitReaderError(BitReaderError),
+    ReadTooMuch {
+        position: u64,
+        max_position: u64,
+    },
 }
 
 impl Error for DeserializationError {
     fn description(&self) -> &str {
         match *self {
-            DeserializationError::InvalidSectionHeader => "Invalid section header",
             DeserializationError::UnexpectedValue{..} => "Invalid value in the source data",
             DeserializationError::BitReaderError(ref err) => err.description(),
+            DeserializationError::ReadTooMuch{..} => "Read more data than allowed",
         }
     }
 }
@@ -31,10 +34,11 @@ impl Error for DeserializationError {
 impl fmt::Display for DeserializationError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            DeserializationError::InvalidSectionHeader => self.description().fmt(fmt),
             DeserializationError::UnexpectedValue{ position, length, expected, got } =>
                 write!(fmt, "Expected {} at position {}..{}, but got {}", expected, position, position + length as u64, got),
             DeserializationError::BitReaderError(ref err) => err.fmt(fmt),
+            DeserializationError::ReadTooMuch{ position, max_position } =>
+                write!(fmt, "Read to position {}, when maximum allowed position was {}", position, max_position),
         }
     }
 }
@@ -52,6 +56,41 @@ pub trait Deserialize: Sized {
         let mut reader = BitReader::new(bytes);
         Deserialize::deserialize(&mut reader)
     }
+}
+
+impl Deserialize for u8 {
+    fn deserialize(reader: &mut BitReader) -> DeserializationResult<u8> {
+        Ok(try!(reader.read_u8(8)))
+    }
+}
+
+impl Deserialize for u16 {
+    fn deserialize(reader: &mut BitReader) -> DeserializationResult<u16> {
+        Ok(try!(reader.read_u16(8)))
+    }
+}
+
+impl Deserialize for u32 {
+    fn deserialize(reader: &mut BitReader) -> DeserializationResult<u32> {
+        Ok(try!(reader.read_u32(8)))
+    }
+}
+
+pub fn read_repeated<T: Deserialize>(max_bytes: usize, reader: &mut BitReader) -> DeserializationResult<Vec<T>> {
+    let max_bits = max_bytes as u64 * 8;
+    let mut repeat_reader = reader.relative_reader();
+    let mut items = vec![];
+    while repeat_reader.position() < max_bits {
+        items.push(try!(Deserialize::deserialize(&mut repeat_reader)));
+        if repeat_reader.position() > max_bits {
+            return Err(DeserializationError::ReadTooMuch {
+                position: repeat_reader.position(),
+                max_position: max_bits,
+            });
+        }
+    }
+    try!(reader.skip(repeat_reader.position() as u32));
+    Ok(items)
 }
 
 pub fn reserved(reader: &mut BitReader, bits: u8) -> DeserializationResult<()> {
