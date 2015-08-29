@@ -120,7 +120,7 @@ pub fn deserialize_descriptor(reader: &mut BitReader) -> DeserializationResult<B
             //0x7c => dvb::AacDescriptor,
             //0x7d => dvb::XaitDescriptor,
             //0x7e => dvb::FtaDescriptor,
-            //0x7f => dvb::ExtensionDescriptor,
+            0x7f => dvb::ExtensionDescriptor,
 
             _ => basic::UnknownDescriptor
         }

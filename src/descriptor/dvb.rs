@@ -608,7 +608,25 @@ impl Descriptor for S2SatelliteDeliverySystemDescriptor {}
 // 0x7c AacDescriptor
 // 0x7d XaitDescriptor
 // 0x7e FtaDescriptor
+
+
 // 0x7f ExtensionDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ExtensionDescriptor {
+        pub descriptor_tag_extension: u8,
+        pub selector_bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x7f },
+        descriptor_length: { 8 },
+        descriptor_tag_extension: { 8 },
+        selector_bytes: { value: try!(repeated_element(descriptor_length, reader, 8)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ExtensionDescriptor {}
+
 
 
 fn remainder_as_string(descriptor_length: u8, reader: &mut bitreader::BitReader) -> bitreader::Result<String> {
