@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use ::base::bool_flag;
+use ::base::{Deserialize,bool_flag};
 use super::{Descriptor,bits_remaining,repeated_element,repeated_sub_element,read_tla};
 use encoding::all::{ISO_8859_1,ISO_8859_2,ISO_8859_3,ISO_8859_4,ISO_8859_5,ISO_8859_6,ISO_8859_7,ISO_8859_8,ISO_8859_10,ISO_8859_13,ISO_8859_14,ISO_8859_15,UTF_16BE,GBK,UTF_8,WINDOWS_949};
 use encoding::{Encoding,DecoderTrap};
@@ -125,7 +125,74 @@ bit_struct!(
 );
 impl Descriptor for CountryAvailabilityDescriptor {}
 
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MobileHandover {
+        pub hand_over_type: u8,
+        pub origin_type: u8,
+        pub network_id: Option<u16>,
+        pub initial_service_id: Option<u16>
+    }
+    deserialize(reader) {
+        hand_over_type: { 4 },
+        reserved: { 3 },
+        origin_type: { 1 },
+        network_id: { value: if hand_over_type == 1 || hand_over_type == 2 || hand_over_type == 3 {
+            Some(try!(reader.read_u16(16)))
+        } else { None } },
+        initial_service_id: { value: if origin_type == 0 {
+            Some(try!(reader.read_u16(16)))
+        } else { None } }
+    }
+);
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct EventLinkage {
+        pub target_event_id: u16,
+        pub target_listed: bool,
+        pub event_simulcast: bool
+    }
+    deserialize(reader) {
+        target_event_id: { 16 },
+        target_listed: { 1, map: bool_flag },
+        event_simulcast: { 1, map: bool_flag },
+        reserved: { 6 }
+    }
+);
+
 // 0x4a LinkageDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct LinkageDescriptor {
+        pub transport_stream_id: u16,
+        pub original_network_id: u16,
+        pub service_id: u16,
+        pub linkage_type: u8,
+        pub mobile_handover: Option<MobileHandover>,
+        pub event_linkage: Option<EventLinkage>,
+        pub data: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x4a },
+        descriptor_length: { 8 },
+        transport_stream_id: { 16 },
+        original_network_id: { 16 },
+        service_id: { 16 },
+        linkage_type: { 8 },
+        mobile_handover: { value: if linkage_type == 8 {
+            Some(try!(Deserialize::deserialize(reader)))
+        } else { None } },
+        event_linkage: { value: if linkage_type == 0x0d {
+            Some(try!(Deserialize::deserialize(reader)))
+        } else { None } },
+        data: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for LinkageDescriptor {}
+
 // 0x4b NvodReferenceDescriptor
 // 0x4c TimeShiftedServiceDescriptor
 // 0x4d ShortEventDescriptor
@@ -202,7 +269,108 @@ bit_struct!(
 );
 impl Descriptor for ComponentDescriptor {}
 
+
+#[derive(Debug)]
+pub enum MosaicCellLinkage {
+    Undefined,
+    BouquetRelated {
+        bouquet_id: u16,
+    },
+    ServiceRelated {
+        original_network_id: u16,
+        transport_stream_id: u16,
+        service_id: u16,
+    },
+    OtherMosaicRelated {
+        original_network_id: u16,
+        transport_stream_id: u16,
+        service_id: u16,
+    },
+    EventRelated {
+        original_network_id: u16,
+        transport_stream_id: u16,
+        service_id: u16,
+        event_id: u16,
+    },
+    Unrecognized(u8)
+}
+fn read_mosaic_cell_linkage(cell_linkage_info: u8, reader: &mut bitreader::BitReader) -> bitreader::Result<MosaicCellLinkage> {
+    let mut r16 = || reader.read_u16(16);
+    let linkage = match cell_linkage_info {
+        0 => MosaicCellLinkage::Undefined,
+        1 => MosaicCellLinkage::BouquetRelated {
+            bouquet_id: try!(r16()),
+        },
+        2 => MosaicCellLinkage::ServiceRelated {
+            original_network_id: try!(r16()),
+            transport_stream_id: try!(r16()),
+            service_id: try!(r16()),
+        },
+        3 => MosaicCellLinkage::OtherMosaicRelated {
+            original_network_id: try!(r16()),
+            transport_stream_id: try!(r16()),
+            service_id: try!(r16()),
+        },
+        4 => MosaicCellLinkage::EventRelated {
+            original_network_id: try!(r16()),
+            transport_stream_id: try!(r16()),
+            service_id: try!(r16()),
+            event_id: try!(r16())
+        },
+        _ => MosaicCellLinkage::Unrecognized(cell_linkage_info),
+    };
+    Ok(linkage)
+}
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MosaicElementaryCell {
+        pub logical_cell_id: u8,
+        pub logical_cell_presentation_info: u8,
+        pub elementary_cell_ids: Vec<u8>,
+        pub cell_linkage: MosaicCellLinkage
+    }
+    deserialize(reader) {
+        logical_cell_id: { 8 },
+        reserved: { 1 },
+        logical_cell_presentation_info: { 3 },
+        elementary_cell_lenght_field: { 8 },
+        elementary_cell_ids: { value: {
+            let mut ids = vec![];
+            for _ in 0..elementary_cell_lenght_field {
+                try!(::base::reserved(reader, 2));
+                ids.push(try!(reader.read_u8(6)));
+            }
+            ids
+        } },
+        cell_linkage_info: { 8 },
+        cell_linkage: { value: try!(read_mosaic_cell_linkage(cell_linkage_info, reader)) }
+    }
+);
+
 // 0x51 MosaicDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MosaicDescriptor {
+        pub mosaic_entry_point: bool,
+        pub number_of_horizontal_elementary_cells: u8,
+        pub number_of_vertical_elementary_cells: u8,
+        pub logical_cells: Vec<MosaicElementaryCell>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x51 },
+        descriptor_length: { 8 },
+        mosaic_entry_point: { 1, map: bool_flag },
+        number_of_horizontal_elementary_cells: { 3 },
+        reserved: { 1 },
+        number_of_vertical_elementary_cells: { 3 },
+        logical_cells: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for MosaicDescriptor {}
+
+
 // 0x52 StreamIdentifierDescriptor
 bit_struct!(
     #[derive(Debug)]
@@ -271,7 +439,45 @@ impl Descriptor for ContentDescriptor {}
 // 0x55 ParentalRatingDescriptor
 // 0x56 TeletextDescriptor
 // 0x57 TelephoneDescriptor
+
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct LocalTimeOffset {
+        pub country_code: String,
+        pub country_region_id: u8,
+        pub local_time_offset_polarity: u8,
+        pub local_time_offset: u16,
+        pub time_of_change: u64,
+        pub next_time_offset: u16
+    }
+    deserialize(reader) {
+        country_code: { value: try!(read_tla(reader)) },
+        country_region_id: { 6 },
+        reserved: { 1 },
+        local_time_offset_polarity: { 1 },
+        local_time_offset: { 16 },
+        time_of_change: { 40 },
+        next_time_offset: { 16 }
+    }
+);
+
 // 0x58 LocalTimeOffsetDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct LocalTimeOffsetDescriptor {
+        pub offsets: Vec<LocalTimeOffset>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x58 },
+        descriptor_length: { 8 },
+        offsets: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for LocalTimeOffsetDescriptor {}
+
+
 // 0x59 SubtitlingDescriptor
 
 
@@ -315,14 +521,126 @@ bit_struct!(
 impl Descriptor for TerrestrialDeliverySystemDescriptor {}
 
 
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct LocalizedText {
+        pub iso_639_language_code: String,
+        pub text: String
+    }
+    deserialize(reader) {
+        iso_639_language_code: { value: try!(read_tla(reader)) },
+        text_length: { 8 },
+        text: { value: try!(read_string(text_length, reader)) }
+    }
+);
+
 // 0x5b MultilingualNetworkNameDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MultilingualNetworkNameDescriptor {
+        pub network_names: Vec<LocalizedText>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x5b },
+        descriptor_length: { 8 },
+        network_names: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for MultilingualNetworkNameDescriptor {}
+
+
 // 0x5c MultilingualBouquetNameDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MultilingualBouquetNameDescriptor {
+        pub bouquet_names: Vec<LocalizedText>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x5c },
+        descriptor_length: { 8 },
+        bouquet_names: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for MultilingualBouquetNameDescriptor {}
+
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MultilingualServiceName {
+        pub iso_639_language_code: String,
+        pub service_provider_name: String,
+        pub service_name: String
+    }
+    deserialize(reader) {
+        iso_639_language_code: { value: try!(read_tla(reader)) },
+        service_provider_name_length: { 8 },
+        service_provider_name: { value: try!(read_string(service_provider_name_length, reader)) },
+        service_name_length: { 8 },
+        service_name: { value: try!(read_string(service_name_length, reader)) }
+    }
+);
+
 // 0x5d MultilingualServiceNameDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MultilingualServiceNameDescriptor {
+        pub service_names: Vec<LocalizedText>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x5d },
+        descriptor_length: { 8 },
+        service_names: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for MultilingualServiceNameDescriptor {}
+
+
 // 0x5e MultilingualComponentDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct MultilingualComponentDescriptor {
+        pub component_tag: u8,
+        pub text_descriptions: Vec<LocalizedText>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x5e },
+        descriptor_length: { 8 },
+        component_tag: { 8 },
+        text_descriptions: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for MultilingualComponentDescriptor {}
+
+
 // 0x5f PrivateDataSpecifierDescriptor
 // 0x60 ServiceMoveDescriptor
 // 0x61 ShortSmoothingBufferDescriptor
+
+
 // 0x62 FrequencyListDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct FrequencyListDescriptor {
+        pub coding_type: u8,
+        pub centre_frequencies: Vec<u32>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x62 },
+        descriptor_length: { 8 },
+        reserved: { 6 },
+        coding_type: { 2 },
+        centre_frequencies: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for FrequencyListDescriptor {}
+
+
 // 0x63 PartialTransportStreamDescriptor
 
 
@@ -620,7 +938,27 @@ impl Descriptor for S2SatelliteDeliverySystemDescriptor {}
 // 0x7b DtsDescriptor
 // 0x7c AacDescriptor
 // 0x7d XaitDescriptor
+
+
 // 0x7e FtaDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct FtaDescriptor {
+        pub do_not_scramble: bool,
+        pub control_remote_access_over_internet: u8,
+        pub do_not_apply_revocation: bool
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x7e },
+        descriptor_length: { 8 },
+        reserved: { 4 },
+        do_not_scramble: { 1, map: bool_flag },
+        control_remote_access_over_internet: { 2 },
+        do_not_apply_revocation: { 1, map: bool_flag },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for FtaDescriptor {}
 
 
 // 0x7f ExtensionDescriptor
@@ -641,6 +979,13 @@ bit_struct!(
 impl Descriptor for ExtensionDescriptor {}
 
 
+fn read_string(length: u8, reader: &mut bitreader::BitReader) -> bitreader::Result<String> {
+    let mut bytes = Vec::with_capacity(length as usize);
+    for _ in 0..length {
+        bytes.push(try!(reader.read_u8(8)));
+    }
+    Ok(bytes_to_string(&bytes[..]))
+}
 
 fn remainder_as_string(descriptor_length: u8, reader: &mut bitreader::BitReader) -> bitreader::Result<String> {
     let mut bytes = vec![];
