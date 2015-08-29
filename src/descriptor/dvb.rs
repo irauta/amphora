@@ -249,7 +249,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 0x54 },
         descriptor_length: { 8 },
-        content_idenfiers: { value: try!(repeated_element(descriptor_length, reader, 4+4+8)) },
+        content_idenfiers: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -352,7 +352,7 @@ bit_struct!(
         expect: { bits: 8, reference: 0x64 },
         descriptor_length: { 8 },
         data_broadcast_id: { 16 },
-        selector_bytes: { value: try!(repeated_element(descriptor_length, reader, 8)) },
+        selector_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -371,7 +371,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 0x68 },
         descriptor_length: { 8 },
-        bytes: { value: try!(repeated_element(descriptor_length, reader, 8)) },
+        bytes: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -444,7 +444,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 0x6c },
         descriptor_length: { 8 },
-        cells: { value: try!(repeated_element(descriptor_length, reader, 16+16+16+12+12+8)) },
+        cells: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -486,7 +486,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 0x6d },
         descriptor_length: { 8 },
-        cells: { value: try!(repeated_element(descriptor_length, reader, 16+32+8)) },
+        cells: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -541,7 +541,7 @@ bit_struct!(
         expect: { bits: 8, reference: 0x6e },
         descriptor_length: { 8 },
         announcement_support: { 16 },
-        services: { value: { try!(repeated_element(descriptor_length, reader, 56)) } },
+        services: { value: { try!(repeated_element(descriptor_length, reader)) } },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -621,7 +621,7 @@ bit_struct!(
         expect: { bits: 8, reference: 0x7f },
         descriptor_length: { 8 },
         descriptor_tag_extension: { 8 },
-        selector_bytes: { value: try!(repeated_element(descriptor_length, reader, 8)) },
+        selector_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );

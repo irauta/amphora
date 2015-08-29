@@ -238,7 +238,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 10 },
         descriptor_length: { 8 },
-        languages: { value: try!(repeated_element(descriptor_length, reader, 32)) },
+        languages: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -478,7 +478,7 @@ bit_struct!(
     deserialize(reader) {
         expect: { bits: 8, reference: 31 },
         descriptor_length: { 8 },
-        channels: { value: try!(repeated_element(descriptor_length, reader, 24)) },
+        channels: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );

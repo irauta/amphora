@@ -134,12 +134,9 @@ fn bits_remaining(descriptor_length: u8, reader: &BitReader) -> u32 {
     total_descriptor_bits - reader.position() as u32
 }
 
-fn repeated_element<T: Deserialize>(descriptor_length: u8, reader: &mut BitReader, element_bit_size: u32) -> DeserializationResult<Vec<T>> {
-    let mut elements = vec![];
-    while bits_remaining(descriptor_length, reader) >= element_bit_size {
-        elements.push(try!(Deserialize::deserialize(reader)));
-    }
-    Ok(elements)
+fn repeated_element<T: Deserialize>(descriptor_length: u8, reader: &mut BitReader) -> DeserializationResult<Vec<T>> {
+    let bytes_remaining = bits_remaining(descriptor_length, reader) / 8;
+    ::base::read_repeated(bytes_remaining as usize, reader)
 }
 
 fn repeated_sub_element<T: Deserialize>(element_bytes: u8, reader: &mut BitReader) -> DeserializationResult<Vec<T>> {
