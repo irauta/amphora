@@ -21,8 +21,67 @@ use bitreader;
 
 
 // 0x40 NetworkNameDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct NetworkNameDescriptor {
+        pub name: String
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x44 },
+        descriptor_length: { 8 },
+        name: { value: try!(remainder_as_string(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for NetworkNameDescriptor {}
+
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct Service {
+        pub service_id: u16,
+        pub service_type: u8
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x44 },
+        descriptor_length: { 8 },
+        service_id: { 16 },
+        service_type: { 8 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+
 // 0x41 ServiceListDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ServiceListDescriptor {
+        pub services: Vec<Service>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x41 },
+        descriptor_length: { 8 },
+        services: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ServiceListDescriptor {}
+
+
 // 0x42 StuffingDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct StuffingDescriptor {
+        // Hacky solution here, might want to impl Deserialize manually for this
+        pub void: ()
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x42 },
+        descriptor_length: { 8 },
+        void: { value: () },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for StuffingDescriptor {}
 
 
 // 0x43 SatelliteDeliverySystemDescriptor
@@ -100,7 +159,29 @@ bit_struct!(
 );
 impl Descriptor for BouquetNameDescriptor {}
 
+
 // 0x48 ServiceDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ServiceDescriptor {
+        pub service_type: u8,
+        pub service_provider_name: String,
+        pub service_name: String
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x48 },
+        descriptor_length: { 8 },
+        service_type: { 8 },
+        service_provider_name_length: { 8 },
+        service_provider_name: { value: try!(read_string(service_provider_name_length, reader)) },
+        service_name_length: { 8 },
+        service_name: { value: try!(read_string(service_name_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ServiceDescriptor {}
+
+
 // 0x49 CountryAvailabilityDescriptor
 bit_struct!(
     #[derive(Debug)]
@@ -193,9 +274,60 @@ bit_struct!(
 );
 impl Descriptor for LinkageDescriptor {}
 
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct NvodReference {
+        pub transport_stream_id: u16,
+        pub original_network_id: u16,
+        pub service_id: u16
+    }
+    deserialize(reader) {
+        transport_stream_id: { 16 },
+        original_network_id: { 16 },
+        service_id: { 16 }
+    }
+);
+
 // 0x4b NvodReferenceDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct NvodReferenceDescriptor {
+        pub nvod_references: Vec<NvodReference>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x4b },
+        descriptor_length: { 8 },
+        nvod_references: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for NvodReferenceDescriptor {}
+
+
 // 0x4c TimeShiftedServiceDescriptor
+
+
 // 0x4d ShortEventDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ShortEventDescriptor {
+        pub iso_639_language_code: String,
+        pub event_name: String,
+        pub text: String
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x4d },
+        descriptor_length: { 8 },
+        iso_639_language_code: { value: try!(read_tla(reader)) },
+        event_name_length: { 8 },
+        event_name: { value: try!(read_string(event_name_length, reader)) },
+        text_length: { 8 },
+        text: { value: try!(read_string(text_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ShortEventDescriptor {}
 
 
 bit_struct!(
@@ -421,6 +553,7 @@ bit_struct!(
     }
 );
 
+
 // 0x54 ContentDescriptor
 bit_struct!(
     #[derive(Debug)]
@@ -436,9 +569,107 @@ bit_struct!(
 );
 impl Descriptor for ContentDescriptor {}
 
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ParentalRating {
+        pub country_code: String,
+        pub rating: u8
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x54 },
+        descriptor_length: { 8 },
+        country_code: { value: try!(read_tla(reader)) },
+        rating: { 8 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+
 // 0x55 ParentalRatingDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ParentalRatingDescriptor {
+        pub ratings: Vec<ParentalRating>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x55 },
+        descriptor_length: { 8 },
+        ratings: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ParentalRatingDescriptor {}
+
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TeletextInfo {
+        pub iso_639_language_code: String,
+        pub teletext_type: u8,
+        pub teletext_magazine_number: u8,
+        pub teletext_page_number: u8
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x55 },
+        descriptor_length: { 8 },
+        iso_639_language_code: { value: try!(read_tla(reader)) },
+        teletext_type: { 5 },
+        teletext_magazine_number: { 3 },
+        teletext_page_number: { 8 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+
 // 0x56 TeletextDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TeletextDescriptor {
+        pub teletext_infos: Vec<TeletextInfo>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x56 },
+        descriptor_length: { 8 },
+        teletext_infos: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for TeletextDescriptor {}
+
+
 // 0x57 TelephoneDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TelephoneDescriptor {
+        pub foreign_availability: bool,
+        pub connection_type: u8,
+        pub country_prefix: String,
+        pub international_area_code: String,
+        pub operator_code: String,
+        pub national_area_code: String,
+        pub core_number: String
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x57 },
+        descriptor_length: { 8 },
+        reserved: { 2 },
+        foreign_availability: { 1, map: bool_flag },
+        connection_type: { 5 },
+        reserved: { 1 },
+        country_prefix_length: { 2 },
+        international_area_code_length: { 3 },
+        operator_code_length: { 2 },
+        reserved: { 1 },
+        national_area_code_length: { 3 },
+        core_number_length: { 4 },
+        country_prefix: { value: try!(read_string_latin1(country_prefix_length, reader)) },
+        international_area_code: { value: try!(read_string_latin1(international_area_code_length, reader)) },
+        operator_code: { value: try!(read_string_latin1(operator_code_length, reader)) },
+        national_area_code: { value: try!(read_string_latin1(national_area_code_length, reader)) },
+        core_number: { value: try!(read_string_latin1(core_number_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for TelephoneDescriptor {}
 
 
 bit_struct!(
@@ -478,7 +709,39 @@ bit_struct!(
 impl Descriptor for LocalTimeOffsetDescriptor {}
 
 
+bit_struct!(
+    #[derive(Debug)]
+    pub struct Subtitling {
+        pub iso_639_language_code: String,
+        pub subtitling_page: u8,
+        pub composition_page_id: u16,
+        pub ancillary_page_id: u16
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x59 },
+        descriptor_length: { 8 },
+        iso_639_language_code: { value: try!(read_tla(reader)) },
+        subtitling_page: { 8 },
+        composition_page_id: { 16 },
+        ancillary_page_id: { 16 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+
 // 0x59 SubtitlingDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct SubtitlingDescriptor {
+        pub subtitles: Vec<Subtitling>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x59 },
+        descriptor_length: { 8 },
+        subtitles: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for SubtitlingDescriptor {}
 
 
 // 0x5a TerrestrialDeliverySystemDescriptor
@@ -618,8 +881,58 @@ impl Descriptor for MultilingualComponentDescriptor {}
 
 
 // 0x5f PrivateDataSpecifierDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct PrivateDataSpecifierDescriptor {
+        pub private_data_specifier: u32
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x5f },
+        descriptor_length: { 8 },
+        private_data_specifier: { 32 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for PrivateDataSpecifierDescriptor {}
+
+
 // 0x60 ServiceMoveDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ServiceMoveDescriptor {
+        pub new_original_network_id: u16,
+        pub new_transport_stream_id: u16,
+        pub new_service_id: u16
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x60 },
+        descriptor_length: { 8 },
+        new_original_network_id: { 16 },
+        new_transport_stream_id: { 16 },
+        new_service_id: { 16 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ServiceMoveDescriptor {}
+
+
 // 0x61 ShortSmoothingBufferDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ShortSmoothingBufferDescriptor {
+        pub sb_size: u8,
+        pub sb_leak_rate: u8
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x60 },
+        descriptor_length: { 8 },
+        sb_size: { 2 },
+        sb_leak_rate: { 6 },
+        // The spec lists N reserved bytes here explicitly, we will just rely on the default skip here:
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ShortSmoothingBufferDescriptor {}
 
 
 // 0x62 FrequencyListDescriptor
@@ -642,6 +955,26 @@ impl Descriptor for FrequencyListDescriptor {}
 
 
 // 0x63 PartialTransportStreamDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct PartialTransportStreamDescriptor {
+        pub peak_rate: u32,
+        pub minimum_overall_smoothing_rate: u32,
+        pub maximum_overall_smoothing_rate: u16
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x63 },
+        descriptor_length: { 8 },
+        reserved: { 2 },
+        peak_rate: { 22 },
+        reserved: { 2 },
+        minimum_overall_smoothing_rate: { 22 },
+        reserved: { 2 },
+        maximum_overall_smoothing_rate: { 14 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for PartialTransportStreamDescriptor {}
 
 
 // 0x64 DataBroadcastDescriptor
@@ -669,7 +1002,20 @@ bit_struct!(
 impl Descriptor for DataBroadcastDescriptor {}
 
 
-// 0x65 CaSystemDescriptor
+// 0x65 ScramblingDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ScramblingDescriptor {
+        pub scrambling_mode: u8
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x65 },
+        descriptor_length: { 8 },
+        scrambling_mode: { 8 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ScramblingDescriptor {}
 
 
 // 0x66 DataBroadcastIdDescriptor
@@ -710,6 +1056,22 @@ impl Descriptor for DsngDescriptor {}
 
 
 // 0x69 PdcDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct PdcDescriptor {
+        pub programme_identification_label: u32
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x69 },
+        descriptor_length: { 8 },
+        reserved: { 4 },
+        programme_identification_label: { 20 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for PdcDescriptor {}
+
+
 // 0x6a Ac3Descriptor
 // 0x6b AncillaryDataDescriptor
 bit_struct!(
@@ -895,7 +1257,27 @@ bit_struct!(
 impl Descriptor for AdaptationFieldDataDescriptor {}
 
 // 0x71 ServiceIdentifierDescriptor
+
+
 // 0x72 ServiceAvailabilityDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ServiceAvailabilityDescriptor {
+        pub available: bool,
+        pub cell_ids: Vec<u16>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x70 },
+        descriptor_length: { 8 },
+        available: { 1, map: bool_flag },
+        reserved: { 7 },
+        cell_ids: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ServiceAvailabilityDescriptor {}
+
+
 // 0x73 DefaultAuthorityDescriptor
 // 0x74 RelatedContentDescriptor
 // 0x75 TvaIdDescriptor
@@ -985,6 +1367,14 @@ fn read_string(length: u8, reader: &mut bitreader::BitReader) -> bitreader::Resu
         bytes.push(try!(reader.read_u8(8)));
     }
     Ok(bytes_to_string(&bytes[..]))
+}
+
+fn read_string_latin1(length: u8, reader: &mut bitreader::BitReader) -> bitreader::Result<String> {
+    let mut string = String::with_capacity(length as usize);
+    for _ in 0..length {
+        string.push(try!(reader.read_u8(8)) as char);
+    }
+    Ok(string)
 }
 
 fn remainder_as_string(descriptor_length: u8, reader: &mut bitreader::BitReader) -> bitreader::Result<String> {
