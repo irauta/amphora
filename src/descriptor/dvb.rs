@@ -142,8 +142,69 @@ bit_struct!(
 impl Descriptor for CableDeliverySystemDescriptor {}
 
 
+bit_struct!(
+    #[derive(Debug)]
+    pub struct VbiDataLine {
+        pub field_parity: u8,
+        pub line_offset: u8
+    }
+    deserialize(reader) {
+        reserved: { 2 },
+        field_parity: { 1 },
+        line_offset: { 5 }
+    }
+);
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct VbiDataService {
+        pub data_service_id: u8,
+        pub vbi_data_lines: Vec<VbiDataLine>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x44 },
+        descriptor_length: { 8 },
+        data_service_id: { 8 },
+        data_service_descriptor_length: { 8 },
+        vbi_data_lines: { value: if data_service_id >= 1 && data_service_id <= 7 {
+            try!(repeated_sub_element(data_service_descriptor_length, reader))
+        } else { vec![] } },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+
 // 0x45 VbiDataDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct VbiDataDescriptor {
+        pub vbi_services: Vec<VbiDataService>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x45 },
+        descriptor_length: { 8 },
+        vbi_services: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for VbiDataDescriptor {}
+
+
 // 0x46 VbiTeletextDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct VbiTeletextDescriptor {
+        pub vbi_teletext_pages: Vec<TeletextPage>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x46 },
+        descriptor_length: { 8 },
+        vbi_teletext_pages: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for VbiTeletextDescriptor {}
+
+
 // 0x47 BouquetNameDescriptor
 bit_struct!(
     #[derive(Debug)]
@@ -306,6 +367,19 @@ impl Descriptor for NvodReferenceDescriptor {}
 
 
 // 0x4c TimeShiftedServiceDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TimeShiftedServiceDescriptor {
+        pub reference_service_id: u16
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x4c },
+        descriptor_length: { 8 },
+        reference_service_id: { 16 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for TimeShiftedServiceDescriptor {}
 
 
 // 0x4d ShortEventDescriptor
@@ -376,6 +450,22 @@ impl Descriptor for ExtendedEventDescriptor {}
 
 
 // 0x4f TimeShiftedEventDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TimeShiftedEventDescriptor {
+        pub reference_service_id: u16,
+        pub reference_event_id: u16
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x4f },
+        descriptor_length: { 8 },
+        reference_service_id: { 16 },
+        reference_event_id: { 16 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for TimeShiftedEventDescriptor {}
+
 
 // 0x50 ComponentDescriptor
 bit_struct!(
@@ -603,7 +693,7 @@ impl Descriptor for ParentalRatingDescriptor {}
 
 bit_struct!(
     #[derive(Debug)]
-    pub struct TeletextInfo {
+    pub struct TeletextPage {
         pub iso_639_language_code: String,
         pub teletext_type: u8,
         pub teletext_magazine_number: u8,
@@ -624,12 +714,12 @@ bit_struct!(
 bit_struct!(
     #[derive(Debug)]
     pub struct TeletextDescriptor {
-        pub teletext_infos: Vec<TeletextInfo>
+        pub teletext_pages: Vec<TeletextPage>
     }
     deserialize(reader) {
         expect: { bits: 8, reference: 0x56 },
         descriptor_length: { 8 },
-        teletext_infos: { value: try!(repeated_element(descriptor_length, reader)) },
+        teletext_pages: { value: try!(repeated_element(descriptor_length, reader)) },
         skip: { bits_remaining(descriptor_length, reader) }
     }
 );
@@ -1026,7 +1116,7 @@ bit_struct!(
         pub selector_bytes: Vec<u8>
     }
     deserialize(reader) {
-        expect: { bits: 8, reference: 0x64 },
+        expect: { bits: 8, reference: 0x66 },
         descriptor_length: { 8 },
         data_broadcast_id: { 16 },
         selector_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
@@ -1037,6 +1127,19 @@ impl Descriptor for DataBroadcastIdDescriptor {}
 
 
 // 0x67 TransportStreamDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TransportStreamDescriptor {
+        pub bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x67 },
+        descriptor_length: { 8 },
+        bytes: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for TransportStreamDescriptor {}
 
 
 // 0x68 DsngDescriptor
@@ -1073,6 +1176,32 @@ impl Descriptor for PdcDescriptor {}
 
 
 // 0x6a Ac3Descriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct Ac3Descriptor {
+        pub component_type: Option<u8>,
+        pub bsid: Option<u8>,
+        pub mainid: Option<u8>,
+        pub asvc: Option<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x6a },
+        descriptor_length: { 8 },
+        component_type_flag: { 1, type: u8 },
+        bsid_flag: { 1, type: u8 },
+        mainid_flag: { 1, type: u8 },
+        asvc_flag: { 1, type: u8 },
+        reserved: { 4 },
+        component_type: { value: if component_type_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        bsid: { value: if bsid_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        mainid: { value: if mainid_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        asvc: { value: if asvc_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for Ac3Descriptor {}
+
+
 // 0x6b AncillaryDataDescriptor
 bit_struct!(
     #[derive(Debug)]
@@ -1240,7 +1369,37 @@ bit_struct!(
 );
 impl Descriptor for AnnouncementSupportDescriptor {}
 
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ApplicationVersionInfo {
+        pub application_type: u16,
+        pub ait_version_number: u8
+    }
+    deserialize(reader) {
+        reserved: { 1 },
+        application_type: { 15 },
+        reserved: { 3 },
+        ait_version_number: { 5 }
+    }
+);
+
 // 0x6f ApplicationSignallingDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ApplicationSignallingDescriptor {
+        pub application_versions: Vec<ApplicationVersionInfo>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x6f },
+        descriptor_length: { 8 },
+        application_versions: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ApplicationSignallingDescriptor {}
+
+
 // 0x70 AdaptationFieldDataDescriptor
 bit_struct!(
     #[derive(Debug)]
@@ -1256,7 +1415,21 @@ bit_struct!(
 );
 impl Descriptor for AdaptationFieldDataDescriptor {}
 
+
 // 0x71 ServiceIdentifierDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ServiceIdentifierDescriptor {
+        pub textual_service_identifier_bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x71 },
+        descriptor_length: { 8 },
+        textual_service_identifier_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ServiceIdentifierDescriptor {}
 
 
 // 0x72 ServiceAvailabilityDescriptor
@@ -1279,11 +1452,162 @@ impl Descriptor for ServiceAvailabilityDescriptor {}
 
 
 // 0x73 DefaultAuthorityDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct DefaultAuthorityDescriptor {
+        pub default_authority_bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x73 },
+        descriptor_length: { 8 },
+        default_authority_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for DefaultAuthorityDescriptor {}
+
+
 // 0x74 RelatedContentDescriptor
+// Huh? The TS 102 323 V1.5.1 doesn't define any other fields than descriptor_tag
+// and descriptor_length?
+bit_struct!(
+    #[derive(Debug)]
+    pub struct RelatedContentDescriptor {
+        // Hacky solution here, might want to impl Deserialize manually for this
+        pub void: ()
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x74 },
+        descriptor_length: { 8 },
+        void: { value: () },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for RelatedContentDescriptor {}
+
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TvaId {
+        pub tva_id: u16,
+        pub running_status: u8
+    }
+    deserialize(reader) {
+        tva_id: { 16 },
+        reserved: { 5 },
+        running_status: { 3 }
+    }
+);
+
 // 0x75 TvaIdDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TvaIdDescriptor {
+        pub tva_ids: Vec<TvaId>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x75 },
+        descriptor_length: { 8 },
+        tva_ids: {  value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for TvaIdDescriptor {}
+
+
+#[derive(Debug)]
+pub enum Crid {
+    Explicit(Vec<u8>),
+    Reference(u16),
+    UnrecognizedCridType(u8)
+}
+
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TypedCrid {
+        pub crid_type: u8,
+        pub crid: Crid
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x76 },
+        descriptor_length: { 8 },
+        crid_type: { 6 },
+        crid_location: { 2, type: u8 },
+        crid: { value: match crid_location {
+            0 => Crid::Explicit({
+                let crid_length = try!(reader.read_u8(8));
+                try!(repeated_sub_element(crid_length, reader))
+            }),
+            1 => Crid::Reference(try!(reader.read_u16(16))),
+            other => Crid::UnrecognizedCridType(other)
+        } },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+
 // 0x76 ContentIdentifierDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct ContentIdentifierDescriptor {
+        pub crids: Vec<TypedCrid>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x76 },
+        descriptor_length: { 8 },
+        crids: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for ContentIdentifierDescriptor {}
+
+
 // 0x77 TimeSliceFecIdentifierDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct TimeSliceFecIdentifierDescriptor {
+        pub time_slicing: bool,
+        pub mpe_fec: u8,
+        pub frame_size: u8,
+        pub max_burst_duration: u8,
+        pub max_average_rate: u8,
+        pub time_slice_fec_id: u8,
+        pub id_selector_bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x77 },
+        descriptor_length: { 8 },
+        time_slicing: { 1, map: bool_flag },
+        mpe_fec: { 2 },
+        reserved: { 2 },
+        frame_size: { 3 },
+        max_burst_duration: { 8 },
+        max_average_rate: { 4 },
+        time_slice_fec_id: { 4 },
+        id_selector_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for TimeSliceFecIdentifierDescriptor {}
+
+
 // 0x78 EcmRepetitionRateDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct EcmRepetitionRateDescriptor {
+        pub ca_system_id: u16,
+        pub ecm_repetition_rate: u16,
+        pub private_data_bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x78 },
+        descriptor_length: { 8 },
+        ca_system_id: { 16 },
+        ecm_repetition_rate: { 16 },
+        private_data_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for EcmRepetitionRateDescriptor {}
 
 
 // 0x79 S2SatelliteDeliverySystemDescriptor
@@ -1317,9 +1641,118 @@ impl Descriptor for S2SatelliteDeliverySystemDescriptor {}
 
 
 // 0x7a EnhancedAc3Descriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct EnhancedAc3Descriptor {
+        pub component_type: Option<u8>,
+        pub bsid: Option<u8>,
+        pub mainid: Option<u8>,
+        pub asvc: Option<u8>,
+        pub mix_info_exists: bool,
+        pub substream_1: Option<u8>,
+        pub substream_2: Option<u8>,
+        pub substream_3: Option<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x7a },
+        descriptor_length: { 8 },
+        component_type_flag: { 1, type: u8 },
+        bsid_flag: { 1, type: u8 },
+        mainid_flag: { 1, type: u8 },
+        asvc_flag: { 1, type: u8 },
+        mix_info_exists: { 1, map: bool_flag },
+        substream_1_flag: { 1, type: u8 },
+        substream_2_flag: { 1, type: u8 },
+        substream_3_flag: { 1, type: u8 },
+        component_type: { value: if component_type_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        bsid: { value: if bsid_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        mainid: { value: if mainid_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        asvc: { value: if asvc_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        substream_1: { value: if substream_1_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        substream_2: { value: if substream_2_flag== 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        substream_3: { value: if substream_3_flag == 1 { Some(try!(reader.read_u8(8))) } else { None } },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for EnhancedAc3Descriptor {}
+
+
 // 0x7b DtsDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct DtsDescriptor {
+        pub sample_rate_code: u8,
+        pub bit_rate_code: u8,
+        pub nblks: u8,
+        pub fsize: u16,
+        pub surround_mode: u8,
+        pub lfe: bool,
+        pub extended_surround_flag: u8,
+        pub additional_info_bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x7b },
+        descriptor_length: { 8 },
+        sample_rate_code: { 4 },
+        bit_rate_code: { 6 },
+        nblks: { 7 },
+        fsize: { 14 },
+        surround_mode: { 6 },
+        lfe: { 1, map: bool_flag },
+        extended_surround_flag: { 2 },
+        additional_info_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for DtsDescriptor {}
+
+
 // 0x7c AacDescriptor
-// 0x7d XaitDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct AacDescriptor {
+        pub profile_and_level: u8,
+        pub aac_type: Option<u8>,
+        pub additional_info_bytes: Vec<u8>
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x7c },
+        descriptor_length: { 8 },
+        profile_and_level: { 8 },
+        aac_type: { value: if descriptor_length > 1 {
+            let aac_type_flag = try!(reader.read_u8(1));
+            try!(::base::reserved(reader, 7));
+            if aac_type_flag == 1 {
+                Some(try!(reader.read_u8(8)))
+            } else { None }
+        } else { None } },
+        additional_info_bytes: { value: try!(repeated_element(descriptor_length, reader)) },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for AacDescriptor {}
+
+
+// 0x7d XaitLocationDescriptor
+bit_struct!(
+    #[derive(Debug)]
+    pub struct XaitLocationDescriptor {
+        pub xait_original_network_id: u16,
+        pub xait_service_id: u16,
+        pub xait_version_number: u8,
+        pub xait_update_policy: u8
+    }
+    deserialize(reader) {
+        expect: { bits: 8, reference: 0x7d },
+        descriptor_length: { 8 },
+        xait_original_network_id: { 16 },
+        xait_service_id: { 16 },
+        xait_version_number: { 5 },
+        xait_update_policy: { 3 },
+        skip: { bits_remaining(descriptor_length, reader) }
+    }
+);
+impl Descriptor for XaitLocationDescriptor {}
 
 
 // 0x7e FtaDescriptor
