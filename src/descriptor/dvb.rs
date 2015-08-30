@@ -700,13 +700,10 @@ bit_struct!(
         pub teletext_page_number: u8
     }
     deserialize(reader) {
-        expect: { bits: 8, reference: 0x55 },
-        descriptor_length: { 8 },
         iso_639_language_code: { value: try!(read_tla(reader)) },
         teletext_type: { 5 },
         teletext_magazine_number: { 3 },
-        teletext_page_number: { 8 },
-        skip: { bits_remaining(descriptor_length, reader) }
+        teletext_page_number: { 8 }
     }
 );
 
@@ -808,13 +805,10 @@ bit_struct!(
         pub ancillary_page_id: u16
     }
     deserialize(reader) {
-        expect: { bits: 8, reference: 0x59 },
-        descriptor_length: { 8 },
         iso_639_language_code: { value: try!(read_tla(reader)) },
         subtitling_page: { 8 },
         composition_page_id: { 16 },
-        ancillary_page_id: { 16 },
-        skip: { bits_remaining(descriptor_length, reader) }
+        ancillary_page_id: { 16 }
     }
 );
 
