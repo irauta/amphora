@@ -102,7 +102,7 @@ pub fn read_repeated<T: Deserialize>(max_bytes: usize, reader: &mut BitReader) -
             });
         }
     }
-    try!(reader.skip(repeat_reader.position() as u32));
+    try!(reader.skip(repeat_reader.position()));
     Ok(items)
 }
 

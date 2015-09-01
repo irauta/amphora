@@ -60,13 +60,13 @@ bit_struct!(
     }
 );
 
-fn bits_remaining(section_length: u16, reader: &BitReader) -> u32 {
+fn bits_remaining(section_length: u16, reader: &BitReader) -> u64 {
     // table_id (8 bits) + section_syntax_indicator (1 bit) +
     // private_indicator (1 bit) + reserved (2 bits) + section_length (12 bits)
     let intro_bits = 24;
     let crc_length = 32;
     // How many data bits after intro bits - excluding CRC32
-    let data_bits = section_length as u32 * 8;
+    let data_bits = section_length as u64 * 8;
     let total_section_bits = intro_bits + data_bits;
-    total_section_bits - reader.position() as u32 - crc_length
+    total_section_bits - reader.position() as u64 - crc_length
 }

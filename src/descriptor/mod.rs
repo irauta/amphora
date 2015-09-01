@@ -140,11 +140,11 @@ pub fn deserialize_descriptor(reader: &mut BitReader) -> DeserializationResult<B
     )
 }
 
-fn bits_remaining(descriptor_length: u8, reader: &BitReader) -> u32 {
+fn bits_remaining(descriptor_length: u8, reader: &BitReader) -> u64 {
     let intro_bits = 16; // descriptor_tag (8 bits) + descriptor_length (8 bits)
-    let data_bits = descriptor_length as u32 * 8; // How many data bits after intro bits
+    let data_bits = descriptor_length as u64 * 8; // How many data bits after intro bits
     let total_descriptor_bits = intro_bits + data_bits;
-    total_descriptor_bits - reader.position() as u32
+    total_descriptor_bits - reader.position() as u64
 }
 
 fn repeated_element<T: Deserialize>(descriptor_length: u8, reader: &mut BitReader) -> DeserializationResult<Vec<T>> {

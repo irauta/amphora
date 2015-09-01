@@ -76,7 +76,7 @@ impl Deserialize for ProgramAssociation {
                 program_map_pid: pid,
             }
         };
-        try!(original_reader.skip(reader.position() as u32));
+        try!(original_reader.skip(reader.position()));
         Ok(association)
     }
 }

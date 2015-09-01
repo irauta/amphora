@@ -31,7 +31,7 @@ macro_rules! bit_struct {
                 let mut relative_reader = original_reader.relative_reader();
                 let $reader = &mut relative_reader;
                 $( bit_struct!(field $field : $reader : { $($tokens)+ } ); )+
-                try!(original_reader.skip($reader.position() as u32));
+                try!(original_reader.skip($reader.position()));
                 Ok($struct_name {
                     $($field_name: $field_name),+
                 })
